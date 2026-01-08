@@ -9,6 +9,7 @@ import time
 import json
 import re
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.common.exceptions import TimeoutException
 
 # ---------------- URLS ----------------
 BASE_URL =[
@@ -115,13 +116,20 @@ def scrape_college_info(driver,URLS):
         }
     }
 
-    # ================= COVER IMAGE =================
-    section = wait.until(
-        EC.presence_of_element_located((By.ID, "topHeaderCard-top-section"))
-    )
 
+        # ================= COVER IMAGE =================
+    try:
+        section = wait.until(
+           (EC.presence_of_element_located((By.ID, "topHeaderCard-top-section")
+            )
+        )
+        )
+    except TimeoutException:
+        print("⚠️ top header not found, using page source fallback")
+        section = driver.find_element(By.TAG_NAME, "body")
+    
     img = section.find_element(By.ID, "topHeaderCard-gallery-image")
-    data["college_name"] = img.get_attribute("alt")
+    
     data["cover_image"] = img.get_attribute("src")
 
     badges = section.find_elements(By.CLASS_NAME, "b8cb")
@@ -141,7 +149,6 @@ def scrape_college_info(driver,URLS):
         data["logo"] = header.find_element(By.CSS_SELECTOR, "div.c55b78 img").get_attribute("src")
     except:
         pass
-
     try:
         data["college_name"] = header.find_element(By.TAG_NAME, "h1").text.strip()
     except:
@@ -2616,7 +2623,15 @@ def parse_articles_section(driver,URLS):
 
     # ---------- COLLEGE HEADER ----------
     try:
-        section = wait.until(EC.presence_of_element_located((By.ID, "topHeaderCard-top-section")))
+        try:
+            section = wait.until(
+            (EC.presence_of_element_located((By.ID, "topHeaderCard-top-section")
+                )
+            )
+            )
+        except TimeoutException:
+            print("⚠️ top header not found, using page source fallback")
+            section = driver.find_element(By.TAG_NAME, "body")
         img = section.find_element(By.ID, "topHeaderCard-gallery-image")
         college_info["college_name"] = img.get_attribute("alt")
         college_info["cover_image"] = img.get_attribute("src")
@@ -2693,10 +2708,13 @@ def parse_articles_section(driver,URLS):
     driver.get(URLS["compare"])
     wait = WebDriverWait(driver, 15)
 
-    section = wait.until(
-        EC.presence_of_element_located((By.ID, "Articles"))
-    )
-
+    try:
+        section = wait.until(
+            EC.presence_of_element_located((By.ID, "Articles"))
+        )
+    except TimeoutException:
+        print("⚠️ Articles section not found, skipping...")
+        return []
     driver.execute_script(
         "arguments[0].scrollIntoView({block:'center'});", section
     )
@@ -2980,46 +2998,13 @@ def parse_faq_scholarships_section(driver, URLS):
 
 #     result['answers'] = answers
 
-#     return result
+    # return result
 
-
-
-
-
-# ---------------- RUN ----------------
-# def scrape_mba_colleges():
-#     driver = create_driver()
-#     data = {}
-    
-#     try:
-        # data["courses"] = scrape_courses(driver)
-        # data["fees"] = scrape_fees(driver)
-        # data["review_summary"] = scrape_review_summary(driver)
-        # data["reviews"] = scrape_reviews(driver)
-        # data["admission_overview"] = scrape_admission_overview(driver)
-        # data["admission_eligibility"] = scrape_admission_eligibility_selection(driver)
-        # data["placement_report"] = scrape_placement_report(driver)
-        # data["average_package"] = scrape_average_package_section(driver)
-        # data["placement_faqs"] = scrape_placement_faqs(driver)
-        # data["cutoff"] = scrape_cutoff(driver)
-        # data["ranking"] = scrape_ranking(driver)
-        # data["ranking_criteria"] = parse_ranking_criteria_html(driver)
-        # data["mini_clips"] = scrape_mini_clips(driver)
-        # data["infrastructure"] = scrape_hostel_campus_structured(driver)
-        # data["faculty"] = parse_faculty_full_html(driver)
-        # data["faculty_reviews"] = parse_faculty_reviews(driver)
-        # data["review_summarisation"] = parse_review_summarisation_all_tabs(driver)
-        # data["articles"] = parse_articles_section(driver)
-        # data["scholarships"] = parse_faq_scholarships_section(driver)
-        # data["qna"]=extract_shiksha_qna(driver),
-    # finally:
-    #     driver.quit()
-    
-    # return data
 
 def scrape_mba_colleges():
     driver = create_driver()
     all_data = []
+    c_count = 1
 
     try:
         for base_url in BASE_URL:
@@ -3028,8 +3013,9 @@ def scrape_mba_colleges():
             URLS = build_urls(base_url)
            
 
-            college_data = {
-                "college_url": base_url,
+            college_data = {       
+                "college_details":{
+                "id":f"college_{c_count:03d}",
                 "college_info":{
                  "college_info":scrape_college_info(driver,URLS),
                  "college_info_program":scrape_college_infopro(driver,URLS),
@@ -3074,10 +3060,11 @@ def scrape_mba_colleges():
                 },
                 
                 "scholarships":parse_faq_scholarships_section(driver,URLS),
-        }
-
+                    }
+               
+                }
             all_data.append(college_data)
-
+            c_count += 1
     finally:
         driver.quit()
 
